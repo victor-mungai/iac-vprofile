@@ -61,5 +61,30 @@ jobs:
         if: steps.Plan.outcome == 'failure'
         run: exit 1
         
+      - name: "Terraform Apply"
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: "Apply"
+        run: |
+          terraform apply -input=false -auto-approve tfplan
+
+      - name: "Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+           aws-region: us-east-1
+
+
+      - name: "Get kube config file"
+        id: getconfig
+        if: steps.Apply.outcome == 'success' || steps.Plan.outcome == 'success'
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name kitops-eks
+
+      - name: "Install ingress-nginx controller"
+        if: steps.getconfig.outcome == 'success'
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/aws/deploy.yaml
+        
 
         
